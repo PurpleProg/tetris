@@ -29,7 +29,7 @@ enum GameEvent {
 // TODO:
 // gameover -> replay ?
 // speed
-// score -> save -> multiplayer
+// score -> save -> multiplayer NOTE: very fun ! but easy to cheat
 // wall-kicks
 // bag preview -> next piece preview (anoying as fuck cause i have to pre-shot the next bag) or no ? if i refill when size is one
 
@@ -102,11 +102,11 @@ fn update(
         *time_since_last_move = Duration::ZERO;
     }
 
-
     // ground collision
     if next_tetromino.collide(grid).is_some() {
         // place tetromino on grid
-        bag.pop().expect("bag empty on groud col")
+        bag.pop()
+            .expect("bag empty on groud col")
             .stamp_onto(grid)
             .expect("tetromino move de-sync");
         // refill bag
@@ -135,14 +135,19 @@ fn render(bag: &Bag, grid: Grid, terminal: &mut DefaultTerminal) -> () {
         ])
         .split(terminal.get_frame().area());
 
-    let title = Paragraph::new("Tetris\n Author: mphippen\n blah blah blah\n rust > C")
-        .style(Style::default().fg(Color::White))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Tetris ")
-                .title_alignment(Alignment::Center),
-        );
+    let title = Paragraph::new(
+        "Tetris
+Author: mphippen
+https://github.com/PurpleProg/tetris
+rust > C",
+    )
+    .style(Style::default().fg(Color::White))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(" Tetris ")
+            .title_alignment(Alignment::Center),
+    );
     let leader_board = Block::default()
         .borders(Borders::ALL)
         .title(" Leaderboard - comming (not) soon ")
