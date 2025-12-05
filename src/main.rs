@@ -3,6 +3,7 @@ use ratatui::{
     DefaultTerminal,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style},
+    symbols,
     widgets::{Block, Borders, Paragraph},
 };
 use std::time::{Duration, Instant};
@@ -17,6 +18,12 @@ use crate::grid::*;
 const SOFT_DROP_SPEED: f32 = 0.05;
 const NORMAL_SPEED: f32 = 0.5;
 
+const CREDITS: &str = "Tetris
+Author : mphippen
+Source : https://github.com/PurpleProg/tetris
+
+rust > C";
+
 // let delay = Duration::from_secs_f32(NORMAL_SPEED);
 
 #[derive(Debug)]
@@ -27,6 +34,7 @@ enum GameEvent {
 }
 
 // TODO:
+// remove expects (rendererrors)
 // gameover -> replay ?
 // speed
 // score -> save -> multiplayer NOTE: very fun ! but easy to cheat
@@ -44,7 +52,7 @@ fn main() -> () {
     let delay = Duration::from_secs_f32(NORMAL_SPEED);
     let mut bag = new_bag();
 
-    loop {
+    'gameloop: loop {
         delta_time = Instant::now() - previous_time;
         time_since_last_move += delta_time;
         previous_time = Instant::now();
@@ -56,7 +64,7 @@ fn main() -> () {
                 return;
             }
             GameEvent::Tick => {}
-            GameEvent::Quit => break,
+            GameEvent::Quit => break 'gameloop,
         }
         render(&bag, grid, &mut terminal);
     }
@@ -126,55 +134,74 @@ fn update(
     GameEvent::Tick
 }
 fn render(bag: &Bag, grid: Grid, terminal: &mut DefaultTerminal) -> () {
+    let area = terminal.get_frame().area();
+    let cell_height = area.height / GRID_HEIGHT as u16;
+    let cell_width = cell_height * 2;
+
+    let vertical_rect = Rect {
+        x: 0,
+        y: 0,
+        width: area.width,
+        // + 2 offset to avoid overlapping the borders (each sides)
+        height: cell_height * GRID_HEIGHT as u16 + 2,
+    };
+
     let layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage(20),
-            Constraint::Min(50),
-            Constraint::Percentage(20),
+            Constraint::Fill(1),
+            // + 2 offset to avoid overlapping the borders (each sides)
+            Constraint::Length(cell_width * GRID_WIDTH as u16 + 2),
+            Constraint::Fill(1),
         ])
-        .split(terminal.get_frame().area());
+        .split(vertical_rect);
 
-    let title = Paragraph::new(
-        "Tetris
-Author: mphippen
-https://github.com/PurpleProg/tetris
-rust > C",
-    )
-    .style(Style::default().fg(Color::White))
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(" Tetris ")
-            .title_alignment(Alignment::Center),
-    );
-    let leader_board = Block::default()
+    let left_panel = Paragraph::new(CREDITS)
+        .style(Style::default().fg(Color::White))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_set(symbols::border::ROUNDED)
+                .border_style(Style::default().fg(ratatui::style::Color::DarkGray))
+                .title(" Tetris ")
+                .title_alignment(Alignment::Center)
+                .title_style(Style::default().fg(Color::White)),
+        );
+
+    let right_panel = Block::default()
         .borders(Borders::ALL)
-        .title(" Leaderboard - comming (not) soon ")
-        .title_alignment(Alignment::Center);
-    let playfield = Block::default()
-        .borders(Borders::NONE)
-        .title(" Playfield ")
-        .title_alignment(Alignment::Center);
+        .border_set(symbols::border::ROUNDED)
+        .border_style(Style::default().fg(ratatui::style::Color::DarkGray))
+        .title(" Leaderboard - coming soon ")
+        .title_alignment(Alignment::Center)
+        .title_style(Style::default().fg(Color::White));
 
-    let mut grid_with_teromino = grid.clone();
+    let playfield = Block::default()
+        .borders(Borders::ALL)
+        .border_set(symbols::border::ROUNDED)
+        .border_style(Style::default().fg(ratatui::style::Color::DarkGray))
+        .title(" Playfield ")
+        .title_alignment(Alignment::Center)
+        .title_style(Style::default().fg(Color::White));
+
+    // create a new temp grid that hold the current tetromino
+    let mut grid_with_tetromino = grid.clone();
     bag.last()
         .expect("bag empty in rendering")
-        .stamp_onto(&mut grid_with_teromino)
+        .stamp_onto(&mut grid_with_tetromino)
         .expect("collision cauth in render, sould've been cauth in update");
 
     terminal
         .draw(|frame| {
-            frame.render_widget(title, layout[0]);
+            frame.render_widget(left_panel, layout[0]);
             frame.render_widget(playfield, layout[1]);
-            frame.render_widget(leader_board, layout[2]);
-            let cell_height = layout[1].height / GRID_HEIGHT as u16;
-            let cell_width = cell_height * 2;
+            frame.render_widget(right_panel, layout[2]);
 
-            for (i, line) in grid_with_teromino.iter().enumerate() {
+            for (i, line) in grid_with_tetromino.iter().enumerate() {
                 for (j, cell) in line.iter().enumerate() {
-                    let y = layout[1].y + (i as u16) * cell_height;
-                    let x = layout[1].x + (j as u16) * cell_width;
+                    // + 1 offset to avoid overlapping the border
+                    let y = layout[1].y + 1 + (i as u16) * cell_height;
+                    let x = layout[1].x + 1 + (j as u16) * cell_width;
 
                     let cell_rect = Rect {
                         x: x,
