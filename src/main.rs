@@ -1,12 +1,13 @@
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::{
-    DefaultTerminal,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     symbols,
     widgets::{Block, Borders, Paragraph},
+    DefaultTerminal,
 };
 use std::time::{Duration, Instant};
+use tetromino::Tetromino;
 
 mod bag;
 mod grid;
@@ -83,49 +84,51 @@ fn update(
         if let Ok(Event::Key(key)) = event::read() {
             match key.code {
                 KeyCode::Esc => return GameEvent::Quit,
-                KeyCode::Char('k') => next_tetromino.rotate(),
-                KeyCode::Up => next_tetromino.rotate(),
-                KeyCode::Char('j') => next_tetromino.rotate(), // NOTE: maybe make a ccw vesion of rotate
-                KeyCode::Char('l') => next_tetromino.pos.x += 1,
-                KeyCode::Right => next_tetromino.pos.x += 1,
-                KeyCode::Char('h') => next_tetromino.pos.x -= 1,
                 KeyCode::Left => next_tetromino.pos.x -= 1,
-                KeyCode::Char(' ') => delay = Duration::from_secs_f32(SOFT_DROP_SPEED),
+                KeyCode::Right => next_tetromino.pos.x += 1,
+                KeyCode::Up => next_tetromino.rotate(), // NOTE: maybe make a ccw vesion of rotate
+                KeyCode::Down => delay = Duration::from_secs_f32(SOFT_DROP_SPEED),
+                KeyCode::Char(' ') => return hard_drop(&mut next_tetromino, bag, grid),
+                // vim keys
+                KeyCode::Char('h') => next_tetromino.pos.x -= 1,
+                KeyCode::Char('l') => next_tetromino.pos.x += 1,
+                KeyCode::Char('k') => next_tetromino.rotate(),
+                KeyCode::Char('j') => return hard_drop(&mut next_tetromino, bag, grid),
                 _ => {}
             }
         }
     }
 
     // sideways collisions
-    if next_tetromino.collide(grid).is_some() {
+    if next_tetromino.collide(grid) {
         // TODO: wall kicks
         // NOTE: this skip the gravity check, allowing for holding the piece against a wall
         // NOTE: it dont ? im leaving it, if you manage to use that bug go on
+        // NOTE: only for a tick i guess
+        // on the tick the sideway move is done
         return GameEvent::Tick;
     }
 
     // move down
-    if *time_since_last_move > delay {
-        next_tetromino.pos.y += 1;
+    if *time_since_last_move >= delay {
         *time_since_last_move = Duration::ZERO;
-    }
-
-    // ground collision
-    if next_tetromino.collide(grid).is_some() {
-        // place tetromino on grid
-        bag.pop()
-            .expect("bag empty on groud col")
-            .stamp_onto(grid)
-            .expect("tetromino move de-sync");
-        // refill bag
-        if bag.is_empty() {
-            *bag = new_bag();
+        // ground collision
+        if next_tetromino.try_move_down(grid).is_err() {
+            // place tetromino on grid
+            bag.pop()
+                .expect("bag empty on groud col")
+                .stamp_onto(grid)
+                .expect("tetromino move de-sync");
+            // refill bag
+            if bag.is_empty() {
+                *bag = new_bag();
+            }
+            // check if the next tetromino will cause a game over
+            if bag.last().expect("bag empty").collide(&grid) {
+                return GameEvent::GameOver;
+            }
+            return GameEvent::Tick;
         }
-        // check if the next tetromino will cause a game over
-        if bag.last().expect("bag empty").collide(&grid).is_some() {
-            return GameEvent::GameOver;
-        }
-        return GameEvent::Tick;
     }
 
     // move
@@ -133,6 +136,16 @@ fn update(
     clear_lines(grid);
     GameEvent::Tick
 }
+
+fn hard_drop(next_tetromino: &mut Tetromino, bag: &mut Bag, grid: &mut Grid) -> GameEvent {
+    while next_tetromino.try_move_down(grid).is_ok() {}
+
+    // move
+    *bag.last_mut().expect("bag empty on move") = next_tetromino.clone();
+    clear_lines(grid);
+    GameEvent::Tick
+}
+
 fn render(bag: &Bag, grid: Grid, terminal: &mut DefaultTerminal) -> () {
     let area = terminal.get_frame().area();
     let cell_height = area.height / GRID_HEIGHT as u16;

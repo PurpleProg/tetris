@@ -39,17 +39,26 @@ impl Tetromino {
             (block.x, block.y) = (-block.y, block.x);
         });
     }
-    pub fn collide(&self, grid: &Grid) -> Option<Collision> {
+    pub fn collide(&self, grid: &Grid) -> bool {
         for block in self.blocks.iter() {
             let x = self.pos.x + block.x;
             let y = self.pos.y + block.y;
             if x as usize >= GRID_WIDTH || y as usize >= GRID_HEIGHT || x < 0 || y < 0 {
-                return Some(Collision::OutOfBound);
+                return true;
             }
             if grid[y as usize][x as usize].is_some() {
-                return Some(Collision::Occupied);
+                return true;
             }
         }
-        None
+        false
+    }
+    pub fn try_move_down(&mut self, grid: &Grid) -> Result<(), ()> {
+        self.pos.y += 1;
+        if self.collide(grid) {
+            self.pos.y -= 1;
+            Err(())
+        } else {
+            Ok(())
+        }
     }
 }
