@@ -41,7 +41,6 @@ enum GameEvent {
 // gameover -> replay ?
 // speed
 // score -> save -> multiplayer NOTE: very fun ! but easy to cheat
-// wall-kicks
 // bag preview -> next piece preview (anoying as fuck cause i have to pre-shot the next bag) or no ? if i refill when size is one
 
 fn main() -> () {
@@ -120,35 +119,39 @@ fn update(
         *time_since_last_move = Duration::ZERO;
         // ground collision
         if next_tetromino.try_move_down(grid).is_err() {
-            // place tetromino on grid
-            bag.pop()
-                .expect("bag empty on groud col")
-                .stamp_onto(grid)
-                .expect("tetromino move de-sync");
-            // refill bag
-            if bag.is_empty() {
-                *bag = new_bag();
-            }
-            // check if the next tetromino will cause a game over
-            if bag.last().expect("bag empty").collide(&grid) {
-                return GameEvent::GameOver;
-            }
-            return GameEvent::Tick;
+            return place_down(bag, grid);
         }
     }
 
     // move
     *bag.last_mut().expect("bag empty on move") = next_tetromino.clone();
-    clear_lines(grid);
     GameEvent::Tick
+}
+
+fn place_down(bag: &mut Bag, grid: &mut Grid) -> GameEvent {
+    // place tetromino on grid
+    bag.pop()
+        .expect("bag empty on groud col")
+        .stamp_onto(grid)
+        .expect("tetromino move de-sync");
+
+    // refill bag
+    if bag.is_empty() {
+        *bag = new_bag();
+    }
+
+    clear_lines(grid);
+
+    // check if the next tetromino will cause a game over
+    if bag.last().expect("bag empty").collide(&grid) {
+        return GameEvent::GameOver;
+    }
+    return GameEvent::Tick;
 }
 
 fn hard_drop(next_tetromino: &mut Tetromino, bag: &mut Bag, grid: &mut Grid) -> GameEvent {
     while next_tetromino.try_move_down(grid).is_ok() {}
-
-    // move
     *bag.last_mut().expect("bag empty on move") = next_tetromino.clone();
-    clear_lines(grid);
     GameEvent::Tick
 }
 

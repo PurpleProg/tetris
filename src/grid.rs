@@ -5,14 +5,22 @@ pub const GRID_HEIGHT: usize = 20;
 pub type Grid = [[Option<Color>; GRID_WIDTH]; GRID_HEIGHT];
 
 pub fn clear_lines(grid: &mut Grid) -> () {
-    let line_index: Option<usize> = grid
+    while grid
         .iter()
-        .enumerate()
-        .position(|(_, line)| line.iter().all(|b| b.is_some()));
-    let Some(last_filled) = line_index else {
+        .any(|line| line.iter().all(|cell| cell.is_some()))
+    {
+        clear_one_line(grid);
+    }
+}
+
+fn clear_one_line(grid: &mut Grid) -> () {
+    let Some(first_full_line) = grid
+        .iter()
+        .position(|line| line.iter().all(|cell| cell.is_some()))
+    else {
         return;
     };
-    for i in (1..=last_filled).rev() {
+    for i in (1..=first_full_line).rev() {
         grid[i] = grid[i - 1];
     }
 }
