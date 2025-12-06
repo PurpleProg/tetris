@@ -19,6 +19,8 @@ use crate::grid::*;
 const SOFT_DROP_SPEED: f32 = 0.05;
 const NORMAL_SPEED: f32 = 0.5;
 
+const WALL_KICK_OFFSETS: [i8; 2] = [-1, 1];
+
 const CREDITS: &str = "Tetris
 Author : mphippen
 Source : https://github.com/PurpleProg/tetris
@@ -101,12 +103,16 @@ fn update(
 
     // sideways collisions
     if next_tetromino.collide(grid) {
-        // TODO: wall kicks
-        // NOTE: this skip the gravity check, allowing for holding the piece against a wall
-        // NOTE: it dont ? im leaving it, if you manage to use that bug go on
-        // NOTE: only for a tick i guess
-        // on the tick the sideway move is done
-        return GameEvent::Tick;
+        for x in WALL_KICK_OFFSETS {
+            let mut kicked_tetromino = next_tetromino.clone();
+            kicked_tetromino.pos.x += x;
+            if !kicked_tetromino.collide(grid) {
+                // move
+                *bag.last_mut().expect("bag empty on move") = kicked_tetromino.clone();
+                return GameEvent::Tick; // skip graviry check for a tick
+            }
+        }
+        return GameEvent::Tick; // skip graviry check for a tick
     }
 
     // move down

@@ -16,6 +16,25 @@ pub struct Tetromino {
     pub pos: Vec2,
     pub color: Color,
 }
+impl Default for Tetromino {
+    fn default() -> Self {
+        Tetromino {
+            blocks: vec![
+                Vec2::new(0, 0),
+                Vec2::new(-1, -1),
+                Vec2::new(-1, 1),
+                Vec2::new(1, -1),
+                Vec2::new(1, 1),
+            ],
+            does_rotate: true,
+            pos: Vec2 {
+                x: GRID_WIDTH as i8 / 2,
+                y: 1,
+            },
+            color: Color::Red,
+        }
+    }
+}
 impl Tetromino {
     pub fn stamp_onto(&self, grid: &mut Grid) -> Result<(), Collision> {
         self.blocks.iter().try_for_each(|block| {

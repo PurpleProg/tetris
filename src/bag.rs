@@ -1,4 +1,3 @@
-use crate::grid::*;
 use crate::tetromino::Tetromino;
 use crate::vec2::Vec2;
 use rand::prelude::SliceRandom;
@@ -6,11 +5,6 @@ use rand::rng;
 use ratatui::style::Color::*;
 
 pub type Bag = Vec<Tetromino>;
-
-const START_POS: Vec2 = Vec2 {
-    x: GRID_WIDTH as i8 / 2,
-    y: 1,
-};
 
 pub fn new_bag() -> Bag {
     let mut bag: Vec<Tetromino> = vec![
@@ -21,21 +15,19 @@ pub fn new_bag() -> Bag {
                 Vec2 { x: 1, y: 0 },
                 Vec2 { x: 2, y: 0 },
             ],
-            does_rotate: true,
-            pos: START_POS,
             color: Red,
+            ..Default::default()
         },
         Tetromino {
-            // wrong rotation center
             blocks: vec![
                 Vec2 { x: 0, y: 0 },
                 Vec2 { x: 1, y: 0 },
                 Vec2 { x: 0, y: 1 },
                 Vec2 { x: 1, y: 1 },
             ],
-            does_rotate: false,
-            pos: START_POS,
             color: Blue,
+            does_rotate: false,
+            ..Default::default()
         },
         Tetromino {
             blocks: vec![
@@ -44,9 +36,8 @@ pub fn new_bag() -> Bag {
                 Vec2::new(0, 1),
                 Vec2::new(1, 1),
             ],
-            does_rotate: true,
-            pos: START_POS,
             color: Green,
+            ..Default::default()
         },
         Tetromino {
             blocks: vec![
@@ -55,10 +46,8 @@ pub fn new_bag() -> Bag {
                 Vec2::new(0, 1),
                 Vec2::new(-1, 1),
             ],
-            does_rotate: true,
-            pos: START_POS,
-
             color: Cyan,
+            ..Default::default()
         },
         Tetromino {
             blocks: vec![
@@ -67,9 +56,8 @@ pub fn new_bag() -> Bag {
                 Vec2::new(-1, 0),
                 Vec2::new(0, 1),
             ],
-            does_rotate: true,
-            pos: START_POS,
             color: Yellow,
+            ..Default::default()
         },
         Tetromino {
             blocks: vec![
@@ -78,9 +66,8 @@ pub fn new_bag() -> Bag {
                 Vec2::new(0, 0),
                 Vec2::new(1, 0),
             ],
-            does_rotate: true,
-            pos: START_POS,
             color: Magenta,
+            ..Default::default()
         },
         Tetromino {
             blocks: vec![
@@ -89,9 +76,8 @@ pub fn new_bag() -> Bag {
                 Vec2::new(0, 0),
                 Vec2::new(-1, 0),
             ],
-            does_rotate: true,
-            pos: START_POS,
             color: White,
+            ..Default::default()
         },
     ];
     bag.shuffle(&mut rng());
