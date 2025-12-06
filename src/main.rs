@@ -16,15 +16,15 @@ mod vec2;
 use crate::bag::*;
 use crate::grid::*;
 
+const TARGET_FPS: u8 = 60;
+// NOTE: need 2 and -2 for the red I,
+// but that would make some tetromino clip through some thin "walls"
 const WALL_KICK_OFFSETS: [i8; 2] = [-1, 1];
-
 const CREDITS: &str = "Tetris
 Author : mphippen
 Source : https://github.com/PurpleProg/tetris
 
 rust > C";
-
-// let delay = Duration::from_secs_f32(NORMAL_SPEED);
 
 #[derive(Debug)]
 enum GameEvent {
@@ -48,16 +48,27 @@ fn main() -> () {
     let mut level: u64 = 1;
     let mut score: u64 = 0;
     let mut total_lines_cleared: u64 = 0;
+    let mut grid: Grid = [[None; GRID_WIDTH]; GRID_HEIGHT];
+    let mut bag = new_bag();
+
     let mut delta_time: Duration;
     let mut previous_time = Instant::now();
     let mut time_since_last_move = Duration::new(0, 0);
-    let mut grid: Grid = [[None; GRID_WIDTH]; GRID_HEIGHT];
-    let mut bag = new_bag();
+
+    let tick_rate: Duration = Duration::from_secs_f32(1.0 / TARGET_FPS as f32);
+
+    let mut frame_time: Duration = Duration::new(0, 0);
 
     'gameloop: loop {
         delta_time = Instant::now() - previous_time;
         time_since_last_move += delta_time;
+        frame_time += delta_time;
         previous_time = Instant::now();
+        if frame_time < tick_rate {
+            std::thread::sleep(tick_rate - frame_time);
+            frame_time = Duration::ZERO;
+            continue 'gameloop;
+        }
 
         match update(
             &mut bag,
@@ -78,7 +89,7 @@ fn main() -> () {
         render(&bag, grid, &mut terminal, level, score);
     }
     ratatui::restore();
-    println!("Score: {}", score);
+    println!("Score: {}, level: {}", score, level);
 }
 
 fn update(
@@ -98,16 +109,39 @@ fn update(
                 KeyCode::Left => next_tetromino.pos.x -= 1,
                 KeyCode::Right => next_tetromino.pos.x += 1,
                 KeyCode::Up => next_tetromino.rotate(),
-                KeyCode::Down => return hard_drop(&mut next_tetromino, bag, grid, level, score, total_lines_cleared),
+                KeyCode::Down => {
+                    return hard_drop(
+                        &mut next_tetromino,
+                        bag,
+                        grid,
+                        level,
+                        score,
+                        total_lines_cleared,
+                    );
+                }
                 KeyCode::Char(' ') => {
-                    return hard_drop(&mut next_tetromino, bag, grid, level, score, total_lines_cleared);
+                    return hard_drop(
+                        &mut next_tetromino,
+                        bag,
+                        grid,
+                        level,
+                        score,
+                        total_lines_cleared,
+                    );
                 }
                 // vim keys
                 KeyCode::Char('h') => next_tetromino.pos.x -= 1,
                 KeyCode::Char('l') => next_tetromino.pos.x += 1,
                 KeyCode::Char('k') => next_tetromino.rotate(),
                 KeyCode::Char('j') => {
-                    return hard_drop(&mut next_tetromino, bag, grid, level, score, total_lines_cleared);
+                    return hard_drop(
+                        &mut next_tetromino,
+                        bag,
+                        grid,
+                        level,
+                        score,
+                        total_lines_cleared,
+                    );
                 }
                 _ => {}
             }
@@ -200,6 +234,9 @@ fn hard_drop(
 ) -> GameEvent {
     while next_tetromino.try_move_down(grid).is_ok() {}
     *bag.last_mut().expect("bag empty on move") = next_tetromino.clone();
+    // that just make the score look more "random"
+    // otherwise it's allway a multiple of 100
+    *score += 11;
     place_down(bag, grid, level, score, 1.5, total_lines_cleared)
 }
 
