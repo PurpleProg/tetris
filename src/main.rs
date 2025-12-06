@@ -16,9 +16,6 @@ mod vec2;
 use crate::bag::*;
 use crate::grid::*;
 
-const SOFT_DROP_SPEED: f32 = 0.05;
-const NORMAL_SPEED: f32 = 0.5;
-
 const WALL_KICK_OFFSETS: [i8; 2] = [-1, 1];
 
 const CREDITS: &str = "Tetris
@@ -37,21 +34,23 @@ enum GameEvent {
 }
 
 // TODO:
-// remove expects (rendererrors)
-// gameover -> replay ?
 // speed
 // score -> save -> multiplayer NOTE: very fun ! but easy to cheat
 // bag preview -> next piece preview (anoying as fuck cause i have to pre-shot the next bag) or no ? if i refill when size is one
+// gameover -> replay ?
+// remove expects (rendererrors)
+// ccw rotate
 
 fn main() -> () {
     let mut terminal = ratatui::init();
 
     // setup game vars
+    let mut level: u8 = 1;
+    let mut score: u64 = 0;
     let mut delta_time: Duration;
     let mut previous_time = Instant::now();
     let mut time_since_last_move = Duration::new(0, 0);
     let mut grid: Grid = [[None; GRID_WIDTH]; GRID_HEIGHT];
-    let delay = Duration::from_secs_f32(NORMAL_SPEED);
     let mut bag = new_bag();
 
     'gameloop: loop {
@@ -59,7 +58,7 @@ fn main() -> () {
         time_since_last_move += delta_time;
         previous_time = Instant::now();
 
-        match update(&mut bag, &mut grid, &mut time_since_last_move, delay) {
+        match update(&mut bag, &mut grid, &mut time_since_last_move, &mut level, &mut score) {
             GameEvent::GameOver => {
                 ratatui::restore();
                 println!("Game Over :(");
@@ -68,16 +67,18 @@ fn main() -> () {
             GameEvent::Tick => {}
             GameEvent::Quit => break 'gameloop,
         }
-        render(&bag, grid, &mut terminal);
+        render(&bag, grid, &mut terminal, level, score);
     }
     ratatui::restore();
+    println!("Score: {}", score);
 }
 
 fn update(
     bag: &mut Bag,
     grid: &mut Grid,
     time_since_last_move: &mut Duration,
-    mut delay: Duration,
+    level: &mut u8,
+    score: &mut u64,
 ) -> GameEvent {
     let mut next_tetromino = bag.last().expect("bag empty at start of update :/").clone();
 
@@ -87,14 +88,14 @@ fn update(
                 KeyCode::Esc => return GameEvent::Quit,
                 KeyCode::Left => next_tetromino.pos.x -= 1,
                 KeyCode::Right => next_tetromino.pos.x += 1,
-                KeyCode::Up => next_tetromino.rotate(), // NOTE: maybe make a ccw vesion of rotate
-                KeyCode::Down => delay = Duration::from_secs_f32(SOFT_DROP_SPEED),
-                KeyCode::Char(' ') => return hard_drop(&mut next_tetromino, bag, grid),
+                KeyCode::Up => next_tetromino.rotate(),
+                KeyCode::Down => return hard_drop(&mut next_tetromino, bag, grid, *level, score),
+                KeyCode::Char(' ') => return hard_drop(&mut next_tetromino, bag, grid, *level, score),
                 // vim keys
                 KeyCode::Char('h') => next_tetromino.pos.x -= 1,
                 KeyCode::Char('l') => next_tetromino.pos.x += 1,
                 KeyCode::Char('k') => next_tetromino.rotate(),
-                KeyCode::Char('j') => return hard_drop(&mut next_tetromino, bag, grid),
+                KeyCode::Char('j') => return hard_drop(&mut next_tetromino, bag, grid, *level, score),
                 _ => {}
             }
         }
@@ -115,11 +116,12 @@ fn update(
     }
 
     // move down
+    let delay: Duration = get_delay_from_level(*level);
     if *time_since_last_move >= delay {
         *time_since_last_move = Duration::ZERO;
         // ground collision
         if next_tetromino.try_move_down(grid).is_err() {
-            return place_down(bag, grid);
+            return place_down(bag, grid, *level, score, 1.0);
         }
     }
 
@@ -128,7 +130,12 @@ fn update(
     GameEvent::Tick
 }
 
-fn place_down(bag: &mut Bag, grid: &mut Grid) -> GameEvent {
+fn get_delay_from_level(level: u8) -> Duration {
+    // formula from https://tetris.wiki/Marathon
+    Duration::from_secs_f64((0.8 - ((level as f64 - 1.0) * 0.007)).powf(level as f64 - 1.0))
+}
+
+fn place_down(bag: &mut Bag, grid: &mut Grid, level: u8, score: &mut u64, score_multiplyer: f32) -> GameEvent {
     // place tetromino on grid
     bag.pop()
         .expect("bag empty on groud col")
@@ -140,22 +147,30 @@ fn place_down(bag: &mut Bag, grid: &mut Grid) -> GameEvent {
         *bag = new_bag();
     }
 
-    clear_lines(grid);
+    // https://tetris.wiki/Scoring#Recent_guideline_compatible_games
+    match clear_lines(grid) {
+        0 => {},
+        1 => *score += (100.0 * level as f32 * score_multiplyer) as u64,
+        2 => *score += (300.0 * level as f32 * score_multiplyer) as u64,
+        3 => *score += (500.0 * level as f32 * score_multiplyer) as u64,
+        4 => *score += (800.0 * level as f32 * score_multiplyer) as u64,
+        _ => {}, // TODO: error
+    }
 
     // check if the next tetromino will cause a game over
     if bag.last().expect("bag empty").collide(&grid) {
         return GameEvent::GameOver;
     }
-    return GameEvent::Tick;
-}
-
-fn hard_drop(next_tetromino: &mut Tetromino, bag: &mut Bag, grid: &mut Grid) -> GameEvent {
-    while next_tetromino.try_move_down(grid).is_ok() {}
-    *bag.last_mut().expect("bag empty on move") = next_tetromino.clone();
     GameEvent::Tick
 }
 
-fn render(bag: &Bag, grid: Grid, terminal: &mut DefaultTerminal) -> () {
+fn hard_drop(next_tetromino: &mut Tetromino, bag: &mut Bag, grid: &mut Grid, level: u8, score: &mut u64) -> GameEvent {
+    while next_tetromino.try_move_down(grid).is_ok() {}
+    *bag.last_mut().expect("bag empty on move") = next_tetromino.clone();
+    place_down(bag, grid, level, score, 1.5)
+}
+
+fn render(bag: &Bag, grid: Grid, terminal: &mut DefaultTerminal, level: u8, score: u64) -> () {
     let area = terminal.get_frame().area();
     let cell_height = area.height / GRID_HEIGHT as u16;
     let cell_width = cell_height * 2;
@@ -178,7 +193,7 @@ fn render(bag: &Bag, grid: Grid, terminal: &mut DefaultTerminal) -> () {
         ])
         .split(vertical_rect);
 
-    let left_panel = Paragraph::new(CREDITS)
+    let left_panel = Paragraph::new(CREDITS.to_owned() + &format!("\nScore: {score}\nlevel: {level}"))
         .style(Style::default().fg(Color::White))
         .block(
             Block::default()
