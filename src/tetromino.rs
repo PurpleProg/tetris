@@ -12,6 +12,7 @@ pub enum Collision {
 #[derive(Debug, Clone)]
 pub struct Tetromino {
     pub blocks: Vec<Vec2>,
+    pub does_rotate: bool,
     pub pos: Vec2,
     pub color: Color,
 }
@@ -35,6 +36,9 @@ impl Tetromino {
         })
     }
     pub fn rotate(&mut self) -> () {
+        if !self.does_rotate {
+            return;
+        }
         self.blocks.iter_mut().for_each(|block| {
             (block.x, block.y) = (-block.y, block.x);
         });
