@@ -33,6 +33,14 @@ enum GameEvent {
     Tick,
 }
 
+struct GameContext {
+    level: u64,
+    score: u64,
+    total_lines_cleared: u64,
+    grid: Grid,
+    bag: Bag,
+}
+
 // TODO:
 // fix speed too slow at startup
 // save score -> leaderboard NOTE: very fun ! but easy to cheat
@@ -45,11 +53,13 @@ fn main() -> () {
     let mut terminal = ratatui::init();
 
     // setup game vars
-    let mut level: u64 = 1;
-    let mut score: u64 = 0;
-    let mut total_lines_cleared: u64 = 0;
-    let mut grid: Grid = [[None; GRID_WIDTH]; GRID_HEIGHT];
-    let mut bag = new_bag();
+    let mut game_context = GameContext {
+        level: 1,
+        score: 0,
+        total_lines_cleared: 0,
+        grid: [[None; GRID_WIDTH]; GRID_HEIGHT],
+        bag: new_bag(),
+    };
 
     let mut delta_time: Duration;
     let mut previous_time = Instant::now();
@@ -70,37 +80,34 @@ fn main() -> () {
             continue 'gameloop;
         }
 
-        match update(
-            &mut bag,
-            &mut grid,
-            &mut time_since_last_move,
-            &mut level,
-            &mut score,
-            &mut total_lines_cleared,
-        ) {
+        match update(&mut game_context, &mut time_since_last_move) {
             GameEvent::GameOver => {
                 ratatui::restore();
                 println!("Game Over :(");
+                println!(
+                    "Score: {}, level: {}",
+                    game_context.score, game_context.level
+                );
                 return;
             }
             GameEvent::Tick => {}
             GameEvent::Quit => break 'gameloop,
         }
-        render(&bag, grid, &mut terminal, level, score);
+        render(&game_context, &mut terminal);
     }
     ratatui::restore();
-    println!("Score: {}, level: {}", score, level);
+    println!(
+        "Score: {}, level: {}",
+        game_context.score, game_context.level
+    );
 }
 
-fn update(
-    bag: &mut Bag,
-    grid: &mut Grid,
-    time_since_last_move: &mut Duration,
-    level: &mut u64,
-    score: &mut u64,
-    total_lines_cleared: &mut u64,
-) -> GameEvent {
-    let mut next_tetromino = bag.last().expect("bag empty at start of update :/").clone();
+fn update(game_context: &mut GameContext, time_since_last_move: &mut Duration) -> GameEvent {
+    let mut next_tetromino = game_context
+        .bag
+        .last()
+        .expect("bag empty at start of update :/")
+        .clone();
 
     if event::poll(Duration::from_secs(0)).unwrap_or(false) {
         if let Ok(Event::Key(key)) = event::read() {
@@ -109,53 +116,26 @@ fn update(
                 KeyCode::Left => next_tetromino.pos.x -= 1,
                 KeyCode::Right => next_tetromino.pos.x += 1,
                 KeyCode::Up => next_tetromino.rotate(),
-                KeyCode::Down => {
-                    return hard_drop(
-                        &mut next_tetromino,
-                        bag,
-                        grid,
-                        level,
-                        score,
-                        total_lines_cleared,
-                    );
-                }
-                KeyCode::Char(' ') => {
-                    return hard_drop(
-                        &mut next_tetromino,
-                        bag,
-                        grid,
-                        level,
-                        score,
-                        total_lines_cleared,
-                    );
-                }
+                KeyCode::Down => return hard_drop(&mut next_tetromino, game_context),
+                KeyCode::Char(' ') => return hard_drop(&mut next_tetromino, game_context),
                 // vim keys
                 KeyCode::Char('h') => next_tetromino.pos.x -= 1,
                 KeyCode::Char('l') => next_tetromino.pos.x += 1,
                 KeyCode::Char('k') => next_tetromino.rotate(),
-                KeyCode::Char('j') => {
-                    return hard_drop(
-                        &mut next_tetromino,
-                        bag,
-                        grid,
-                        level,
-                        score,
-                        total_lines_cleared,
-                    );
-                }
+                KeyCode::Char('j') => return hard_drop(&mut next_tetromino, game_context),
                 _ => {}
             }
         }
     }
 
     // sideways collisions
-    if next_tetromino.collide(grid) {
+    if next_tetromino.collide(&game_context.grid) {
         for x in WALL_KICK_OFFSETS {
             let mut kicked_tetromino = next_tetromino.clone();
             kicked_tetromino.pos.x += x;
-            if !kicked_tetromino.collide(grid) {
+            if !kicked_tetromino.collide(&game_context.grid) {
                 // move
-                *bag.last_mut().expect("bag empty on move") = kicked_tetromino.clone();
+                *game_context.bag.last_mut().expect("bag empty on move") = kicked_tetromino.clone();
                 return GameEvent::Tick; // skip gravity check for a tick
             }
         }
@@ -163,17 +143,17 @@ fn update(
     }
 
     // move down
-    let delay: Duration = get_delay_from_level(*level);
+    let delay: Duration = get_delay_from_level(game_context.level);
     if *time_since_last_move >= delay {
         *time_since_last_move = Duration::ZERO;
         // ground collision
-        if next_tetromino.try_move_down(grid).is_err() {
-            return place_down(bag, grid, level, score, 1.0, total_lines_cleared);
+        if next_tetromino.try_move_down(&game_context.grid).is_err() {
+            return place_down(game_context, 1.0);
         }
     }
 
     // move
-    *bag.last_mut().expect("bag empty on move") = next_tetromino.clone();
+    *game_context.bag.last_mut().expect("bag empty on move") = next_tetromino.clone();
     GameEvent::Tick
 }
 
@@ -182,65 +162,58 @@ fn get_delay_from_level(level: u64) -> Duration {
     Duration::from_secs_f64((0.8 - ((level as f64 - 1.0) * 0.007)).powf(level as f64 - 1.0))
 }
 
-fn place_down(
-    bag: &mut Bag,
-    grid: &mut Grid,
-    level: &mut u64,
-    score: &mut u64,
-    score_multiplier: f32,
-    total_lines_cleared: &mut u64,
-) -> GameEvent {
+fn place_down(game_context: &mut GameContext, score_multiplier: f32) -> GameEvent {
     // place tetromino on grid
-    bag.pop()
+    game_context
+        .bag
+        .pop()
         .expect("bag empty on groud col")
-        .stamp_onto(grid)
+        .stamp_onto(&mut game_context.grid)
         .expect("tetromino move de-sync");
 
     // refill bag
-    if bag.is_empty() {
-        *bag = new_bag();
+    if game_context.bag.is_empty() {
+        game_context.bag = new_bag();
     }
 
     // https://tetris.wiki/Scoring#Recent_guideline_compatible_games
-    let lines_cleared_this_frame = clear_lines(grid);
+    let lines_cleared_this_frame = clear_lines(&mut game_context.grid);
     match lines_cleared_this_frame {
         0 => {}
-        1 => *score += (100.0 * *level as f32 * score_multiplier) as u64,
-        2 => *score += (300.0 * *level as f32 * score_multiplier) as u64,
-        3 => *score += (500.0 * *level as f32 * score_multiplier) as u64,
-        4 => *score += (800.0 * *level as f32 * score_multiplier) as u64,
+        1 => game_context.score += (100.0 * game_context.level as f32 * score_multiplier) as u64,
+        2 => game_context.score += (300.0 * game_context.level as f32 * score_multiplier) as u64,
+        3 => game_context.score += (500.0 * game_context.level as f32 * score_multiplier) as u64,
+        4 => game_context.score += (800.0 * game_context.level as f32 * score_multiplier) as u64,
         _ => {} // TODO: error
     }
     // https://tetris.wiki/Marathon
-    *total_lines_cleared += lines_cleared_this_frame as u64;
-    if *total_lines_cleared / 10 > *level {
-        *level = *total_lines_cleared / 10;
+    game_context.total_lines_cleared += lines_cleared_this_frame as u64;
+    if game_context.total_lines_cleared / 10 > game_context.level {
+        game_context.level = game_context.total_lines_cleared / 10;
     }
 
     // check if the next tetromino will cause a game over
-    if bag.last().expect("bag empty").collide(&grid) {
+    if game_context
+        .bag
+        .last()
+        .expect("bag empty")
+        .collide(&game_context.grid)
+    {
         return GameEvent::GameOver;
     }
     GameEvent::Tick
 }
 
-fn hard_drop(
-    next_tetromino: &mut Tetromino,
-    bag: &mut Bag,
-    grid: &mut Grid,
-    level: &mut u64,
-    score: &mut u64,
-    total_lines_cleared: &mut u64,
-) -> GameEvent {
-    while next_tetromino.try_move_down(grid).is_ok() {}
-    *bag.last_mut().expect("bag empty on move") = next_tetromino.clone();
+fn hard_drop(next_tetromino: &mut Tetromino, game_context: &mut GameContext) -> GameEvent {
+    while next_tetromino.try_move_down(&game_context.grid).is_ok() {}
+    *game_context.bag.last_mut().expect("bag empty on move") = next_tetromino.clone();
     // that just make the score look more "random"
     // otherwise it's allway a multiple of 100
-    *score += 11;
-    place_down(bag, grid, level, score, 1.5, total_lines_cleared)
+    game_context.score += 11;
+    place_down(game_context, 1.5)
 }
 
-fn render(bag: &Bag, grid: Grid, terminal: &mut DefaultTerminal, level: u64, score: u64) -> () {
+fn render(game_context: &GameContext, terminal: &mut DefaultTerminal) -> () {
     let area = terminal.get_frame().area();
     let cell_height = area.height / GRID_HEIGHT as u16;
     let cell_width = cell_height * 2;
@@ -263,18 +236,19 @@ fn render(bag: &Bag, grid: Grid, terminal: &mut DefaultTerminal, level: u64, sco
         ])
         .split(vertical_rect);
 
-    let left_panel =
-        Paragraph::new(CREDITS.to_owned() + &format!("\nScore: {score}\nlevel: {level}"))
-            .style(Style::default().fg(Color::White))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_set(symbols::border::ROUNDED)
-                    .border_style(Style::default().fg(ratatui::style::Color::DarkGray))
-                    .title(" Tetris ")
-                    .title_alignment(Alignment::Center)
-                    .title_style(Style::default().fg(Color::White)),
-            );
+    let left_panel = Paragraph::new(
+        CREDITS.to_owned() + &format!("\nScore: game_context.score\nlevel: game_context.level"),
+    ) // FIXME:
+    .style(Style::default().fg(Color::White))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_set(symbols::border::ROUNDED)
+            .border_style(Style::default().fg(ratatui::style::Color::DarkGray))
+            .title(" Tetris ")
+            .title_alignment(Alignment::Center)
+            .title_style(Style::default().fg(Color::White)),
+    );
 
     let right_panel = Block::default()
         .borders(Borders::ALL)
@@ -293,8 +267,10 @@ fn render(bag: &Bag, grid: Grid, terminal: &mut DefaultTerminal, level: u64, sco
         .title_style(Style::default().fg(Color::White));
 
     // create a new temp grid that hold the current tetromino
-    let mut grid_with_tetromino = grid.clone();
-    bag.last()
+    let mut grid_with_tetromino = game_context.grid.clone();
+    game_context
+        .bag
+        .last()
         .expect("bag empty in rendering")
         .stamp_onto(&mut grid_with_tetromino)
         .expect("collision cauth in render, sould've been cauth in update");
