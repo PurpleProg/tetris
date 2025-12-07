@@ -1,16 +1,17 @@
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::{
-    DefaultTerminal,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     symbols,
     widgets::{Block, Borders, Paragraph},
+    DefaultTerminal,
 };
 use std::time::{Duration, Instant};
 use tetromino::Tetromino;
 
 mod bag;
 mod grid;
+mod leaderboard;
 mod tetromino;
 mod vec2;
 use crate::bag::*;
@@ -84,10 +85,7 @@ fn main() -> () {
             GameEvent::GameOver => {
                 ratatui::restore();
                 println!("Game Over :(");
-                println!(
-                    "Score: {}, level: {}",
-                    game_context.score, game_context.level
-                );
+                println!("{game_context.to_entry()#?}");
                 return;
             }
             GameEvent::Tick => {}
