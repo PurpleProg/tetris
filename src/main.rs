@@ -85,7 +85,10 @@ fn main() -> () {
             GameEvent::GameOver => {
                 ratatui::restore();
                 println!("Game Over :(");
-                println!("{game_context.to_entry()#?}");
+                println!(
+                    "Score: {}, level: {}",
+                    game_context.score, game_context.level
+                );
                 return;
             }
             GameEvent::Tick => {}
@@ -235,7 +238,7 @@ fn render(game_context: &GameContext, terminal: &mut DefaultTerminal) -> () {
         .split(vertical_rect);
 
     let left_panel = Paragraph::new(
-        CREDITS.to_owned() + &format!("\nScore: game_context.score\nlevel: game_context.level"),
+        CREDITS.to_owned() + &format!("\nScore: {}\nlevel: {}", game_context.score, game_context.level),
     ) // FIXME:
     .style(Style::default().fg(Color::White))
     .block(
