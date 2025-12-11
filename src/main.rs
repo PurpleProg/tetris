@@ -49,6 +49,7 @@ struct GameContext {
 // gameover -> replay ?
 // remove expects (rendererrors)
 // ccw rotate
+// preview, hold
 
 fn main() -> () {
     let mut terminal = ratatui::init();
@@ -116,9 +117,13 @@ fn update(game_context: &mut GameContext, time_since_last_move: &mut Duration) -
                 KeyCode::Esc => return GameEvent::Quit,
                 KeyCode::Left => next_tetromino.pos.x -= 1,
                 KeyCode::Right => next_tetromino.pos.x += 1,
-                KeyCode::Up => next_tetromino.rotate(),
-                KeyCode::Down => return hard_drop(&mut next_tetromino, game_context),
+                KeyCode::Up => next_tetromino.rotate(), // hard drop
+                KeyCode::Down => return hard_drop(&mut next_tetromino, game_context), // soft drop
                 KeyCode::Char(' ') => return hard_drop(&mut next_tetromino, game_context),
+                // z cw
+                // x 180
+                // c ccw
+                // s hold piece
                 // vim keys
                 KeyCode::Char('h') => next_tetromino.pos.x -= 1,
                 KeyCode::Char('l') => next_tetromino.pos.x += 1,
