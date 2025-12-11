@@ -7,10 +7,9 @@ use ratatui::{
     symbols,
     widgets::{Block, Borders, Paragraph},
 };
-use std::{
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 use tetromino::Tetromino;
+use users::get_current_username;
 
 mod bag;
 mod grid;
@@ -41,10 +40,11 @@ enum GameEvent {
 struct GameContext {
     level: u64,
     score: u64,
+    username: String,
     total_lines_cleared: u64,
     grid: Grid,
     bag: Bag,
-    leaderboard: Vec<Entry>,
+    leaderboard: LeaderBoard,
 }
 
 // TODO:
@@ -63,11 +63,24 @@ fn main() -> () {
     let mut game_context = GameContext {
         level: 1,
         score: 0,
+        username: get_current_username()
+            .unwrap_or("User not found".into())
+            .into_string()
+            .expect("error converting OsString to String"),
         total_lines_cleared: 0,
         grid: [[None; GRID_WIDTH]; GRID_HEIGHT],
         bag: new_bag(),
-        leaderboard: load_leaderboard(), // TODO: load from file
+        leaderboard: LeaderBoard::load(),
     };
+    if game_context
+        .leaderboard
+        .get_entry(&game_context.username)
+        .is_none()
+    {
+        game_context
+            .leaderboard
+            .add_entry(Entry::new(&game_context));
+    }
 
     let mut delta_time: Duration;
     let mut previous_time = Instant::now();
@@ -90,8 +103,11 @@ fn main() -> () {
 
         match update(&mut game_context, &mut time_since_last_move) {
             GameEvent::GameOver => {
+                // NOTE: gameover logic here ?
+                // could use it's own function
                 ratatui::restore();
                 println!("Game Over :(");
+                game_context.leaderboard.save(".scores");
                 println!(
                     "Score: {}, level: {}",
                     game_context.score, game_context.level
@@ -101,10 +117,20 @@ fn main() -> () {
             GameEvent::Tick => {}
             GameEvent::Quit => break 'gameloop,
         }
+        let _ = game_context
+            .leaderboard
+            .update_entry(
+                &game_context.username,
+                game_context.score,
+                game_context.level,
+            )
+            .expect("entry not found for update");
         render(&game_context, &mut terminal);
     }
+    // NOTE: quit logic here ?
+    // could use it's own function too
     ratatui::restore();
-    save_score(&game_context);
+    game_context.leaderboard.save(".scores");
     println!(
         "Score: {}, level: {}",
         game_context.score, game_context.level
@@ -220,10 +246,7 @@ fn place_down(game_context: &mut GameContext, score_multiplier: f32) -> GameEven
 fn hard_drop(next_tetromino: &mut Tetromino, game_context: &mut GameContext) -> GameEvent {
     while next_tetromino.try_move_down(&game_context.grid).is_ok() {}
     *game_context.bag.last_mut().expect("bag empty on move") = next_tetromino.clone();
-    // that just make the score look more "random"
-    // otherwise it's allway a multiple of 100
-    game_context.score += 11;
-    place_down(game_context, 1.5)
+    place_down(game_context, 1.0)
 }
 
 fn render(game_context: &GameContext, terminal: &mut DefaultTerminal) -> () {
@@ -255,7 +278,7 @@ fn render(game_context: &GameContext, terminal: &mut DefaultTerminal) -> () {
                 "\nScore: {}\nlevel: {}",
                 game_context.score, game_context.level
             ),
-    ) // FIXME:
+    )
     .style(Style::default().fg(Color::White))
     .block(
         Block::default()
@@ -267,13 +290,15 @@ fn render(game_context: &GameContext, terminal: &mut DefaultTerminal) -> () {
             .title_style(Style::default().fg(Color::White)),
     );
 
-    let right_panel = Block::default()
-        .borders(Borders::ALL)
-        .border_set(symbols::border::ROUNDED)
-        .border_style(Style::default().fg(ratatui::style::Color::DarkGray))
-        .title(" Leaderboard - coming soon ")
-        .title_alignment(Alignment::Center)
-        .title_style(Style::default().fg(Color::White));
+    let right_panel = Paragraph::new(game_context.leaderboard.to_string()).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_set(symbols::border::ROUNDED)
+            .border_style(Style::default().fg(ratatui::style::Color::DarkGray))
+            .title(" Leaderboard - coming soon ")
+            .title_alignment(Alignment::Center)
+            .title_style(Style::default().fg(Color::White)),
+    );
 
     let playfield = Block::default()
         .borders(Borders::ALL)

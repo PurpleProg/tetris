@@ -15,11 +15,8 @@ impl Entry {
         Entry {
             level: context.level,
             score: context.score,
-            username: "implement me".to_owned(), // TODO: get $USER
+            username: context.username.clone(),
         }
-    }
-    fn empty() -> Self {
-        Self { level: 0, score: 0, username: "TEST_USERNAME".to_owned()}
     }
 }
 
@@ -59,19 +56,66 @@ impl PartialOrd for Entry {
     }
 }
 
-type LeaderBoard = Vec<Entry>;
-
-pub fn save_score(context: &GameContext) {
-    let entry = Entry::new(context);
-    write!(
-        File::create(".scores").expect("cannot create file !"),
-        "{}",
-        serde_json::to_string(&entry).expect("failed to serialize")
-    )
-    .expect("failed to write to file");
+#[derive(Debug)]
+pub enum EntryError {
+    EntryNotFount,
 }
 
-pub fn load_leaderboard() -> LeaderBoard {
-    vec![Entry::empty()]
+#[derive(Serialize, Deserialize)]
+pub struct LeaderBoard {
+    pub entrys: Vec<Entry>,
+}
+impl LeaderBoard {
+    pub fn load() -> Self {
+        let string = ""; // TODO: load from file
+        Self {
+            entrys: serde_json::from_str(&string).unwrap_or(vec![Entry {
+                username: "failed to load save file".to_owned(),
+                score: 42,
+                level: 42,
+            }]),
+        }
+    }
+    pub fn save(self, filename: &str) {
+        write!(
+            File::create(filename).expect("cannot create file !"),
+            "{}",
+            serde_json::to_string(&self).expect("failed to serialize")
+        )
+        .expect("failed to write to file");
+    }
+    pub fn add_entry(&mut self, entry: Entry) {
+        self.entrys.push(entry);
+    }
+    pub fn get_entry(&mut self, username: &str) -> Option<&mut Entry> {
+        for entry in self.entrys.iter_mut() {
+            if entry.username == username {
+                return Some(entry);
+            }
+        }
+        None
+    }
+    pub fn update_entry(
+        &mut self,
+        username: &str,
+        score: u64,
+        level: u64,
+    ) -> Result<(), EntryError> {
+        let entry: &mut Entry = self.get_entry(username).ok_or(EntryError::EntryNotFount)?;
+        if score > entry.score {
+            entry.level = level;
+            entry.score = score;
+        }
+        Ok(())
+    }
+}
 
+impl ToString for LeaderBoard {
+    fn to_string(&self) -> String {
+        let mut string = String::new();
+        self.entrys.iter().for_each(|entry| {
+            string += &format!("{: <20}: {: <10}\n", entry.username, entry.score)
+        });
+        string
+    }
 }
