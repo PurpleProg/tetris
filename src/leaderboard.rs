@@ -1,4 +1,9 @@
-#[derive(Debug)]
+use serde::{Deserialize, Serialize};
+use std::{fs::File, io::Write};
+
+use crate::GameContext;
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Entry {
     pub level: u64,
     pub score: u64,
@@ -6,12 +11,15 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn new(level: u64, score: u64, username: String) -> Self {
+    pub fn new(context: &GameContext) -> Self {
         Entry {
-            level,
-            score,
-            username,
+            level: context.level,
+            score: context.score,
+            username: "implement me".to_owned(), // TODO: get $USER
         }
+    }
+    fn empty() -> Self {
+        Self { level: 0, score: 0, username: "TEST_USERNAME".to_owned()}
     }
 }
 
@@ -49,4 +57,21 @@ impl PartialOrd for Entry {
         }
         return None;
     }
+}
+
+type LeaderBoard = Vec<Entry>;
+
+pub fn save_score(context: &GameContext) {
+    let entry = Entry::new(context);
+    write!(
+        File::create(".scores").expect("cannot create file !"),
+        "{}",
+        serde_json::to_string(&entry).expect("failed to serialize")
+    )
+    .expect("failed to write to file");
+}
+
+pub fn load_leaderboard() -> LeaderBoard {
+    vec![Entry::empty()]
+
 }

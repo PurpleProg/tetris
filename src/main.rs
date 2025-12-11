@@ -1,12 +1,15 @@
 use crossterm::event::{self, Event, KeyCode};
+use leaderboard::Entry;
 use ratatui::{
+    DefaultTerminal,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     symbols,
     widgets::{Block, Borders, Paragraph},
-    DefaultTerminal,
 };
-use std::time::{Duration, Instant};
+use std::{
+    time::{Duration, Instant},
+};
 use tetromino::Tetromino;
 
 mod bag;
@@ -16,6 +19,7 @@ mod tetromino;
 mod vec2;
 use crate::bag::*;
 use crate::grid::*;
+use crate::leaderboard::*;
 
 const TARGET_FPS: u8 = 60;
 // NOTE: need 2 and -2 for the red I,
@@ -40,6 +44,7 @@ struct GameContext {
     total_lines_cleared: u64,
     grid: Grid,
     bag: Bag,
+    leaderboard: Vec<Entry>,
 }
 
 // TODO:
@@ -61,6 +66,7 @@ fn main() -> () {
         total_lines_cleared: 0,
         grid: [[None; GRID_WIDTH]; GRID_HEIGHT],
         bag: new_bag(),
+        leaderboard: load_leaderboard(), // TODO: load from file
     };
 
     let mut delta_time: Duration;
@@ -98,6 +104,7 @@ fn main() -> () {
         render(&game_context, &mut terminal);
     }
     ratatui::restore();
+    save_score(&game_context);
     println!(
         "Score: {}, level: {}",
         game_context.score, game_context.level
@@ -243,7 +250,11 @@ fn render(game_context: &GameContext, terminal: &mut DefaultTerminal) -> () {
         .split(vertical_rect);
 
     let left_panel = Paragraph::new(
-        CREDITS.to_owned() + &format!("\nScore: {}\nlevel: {}", game_context.score, game_context.level),
+        CREDITS.to_owned()
+            + &format!(
+                "\nScore: {}\nlevel: {}",
+                game_context.score, game_context.level
+            ),
     ) // FIXME:
     .style(Style::default().fg(Color::White))
     .block(
