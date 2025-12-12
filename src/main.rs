@@ -70,7 +70,7 @@ fn main() -> () {
         total_lines_cleared: 0,
         grid: [[None; GRID_WIDTH]; GRID_HEIGHT],
         bag: new_bag(),
-        leaderboard: LeaderBoard::load(),
+        leaderboard: LeaderBoard::load(".scores"),
     };
     if game_context
         .leaderboard
@@ -117,19 +117,27 @@ fn main() -> () {
             GameEvent::Tick => {}
             GameEvent::Quit => break 'gameloop,
         }
-        let _ = game_context
-            .leaderboard
-            .update_entry(
-                &game_context.username,
-                game_context.score,
-                game_context.level,
-            )
-            .expect("entry not found for update");
+        // let _ = game_context
+        //     .leaderboard
+        //     .update_entry(
+        //         &game_context.username,
+        //         game_context.score,
+        //         game_context.level,
+        //     )
+        //     .expect("entry not found for update");
         render(&game_context, &mut terminal);
     }
     // NOTE: quit logic here ?
     // could use it's own function too
     ratatui::restore();
+    let _ = game_context
+        .leaderboard
+        .update_entry(
+            &game_context.username,
+            game_context.score,
+            game_context.level,
+        )
+        .expect("entry not found for update");
     game_context.leaderboard.save(".scores");
     println!(
         "Score: {}, level: {}",
@@ -295,7 +303,7 @@ fn render(game_context: &GameContext, terminal: &mut DefaultTerminal) -> () {
             .borders(Borders::ALL)
             .border_set(symbols::border::ROUNDED)
             .border_style(Style::default().fg(ratatui::style::Color::DarkGray))
-            .title(" Leaderboard - coming soon ")
+            .title(" 42 lyon leaderboard ")
             .title_alignment(Alignment::Center)
             .title_style(Style::default().fg(Color::White)),
     );

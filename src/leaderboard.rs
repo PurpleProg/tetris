@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::{fs::File, io::Write};
 
 use crate::GameContext;
 
@@ -56,6 +55,15 @@ impl PartialOrd for Entry {
     }
 }
 
+impl ToString for Entry {
+    fn to_string(&self) -> String {
+        format!(
+            "{: <20}: {: <10} level : {: >3}\n",
+            self.username, self.score, self.level
+        )
+    }
+}
+
 #[derive(Debug)]
 pub enum EntryError {
     EntryNotFount,
@@ -66,23 +74,18 @@ pub struct LeaderBoard {
     pub entrys: Vec<Entry>,
 }
 impl LeaderBoard {
-    pub fn load() -> Self {
-        let string = ""; // TODO: load from file
+    pub fn load(path: &str) -> Self {
+        let string: String = std::fs::read_to_string(path).expect("cannot load save file");
         Self {
-            entrys: serde_json::from_str(&string).unwrap_or(vec![Entry {
-                username: "failed to load save file".to_owned(),
-                score: 42,
-                level: 42,
-            }]),
+            entrys: serde_json::from_str(&string).expect("error serialising")
+            // .unwrap_or(Vec::new()), // unwrap_or(vec![Entry {username: "failed to load save file".to_owned(), score: 42, level: 42,}])
         }
     }
-    pub fn save(self, filename: &str) {
-        write!(
-            File::create(filename).expect("cannot create file !"),
-            "{}",
-            serde_json::to_string(&self).expect("failed to serialize")
-        )
-        .expect("failed to write to file");
+    pub fn save(self, path: &str) {
+        let string = serde_json::to_string(&self).expect("failed to serialize");
+        println!("saving {}", string);
+        println!("leaderboraed {}", self.to_string());
+        std::fs::write(path, string).expect("failed to write to file");
     }
     pub fn add_entry(&mut self, entry: Entry) {
         self.entrys.push(entry);
@@ -106,16 +109,17 @@ impl LeaderBoard {
             entry.level = level;
             entry.score = score;
         }
+        println!("updated entry: {}", entry.to_string());
         Ok(())
     }
 }
 
 impl ToString for LeaderBoard {
     fn to_string(&self) -> String {
-        let mut string = String::new();
-        self.entrys.iter().for_each(|entry| {
-            string += &format!("{: <20}: {: <10}\n", entry.username, entry.score)
-        });
-        string
+        self.entrys
+            .iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<String>>()
+            .concat()
     }
 }
